@@ -107,10 +107,32 @@ Environment variables (optional):
 # .env
 PORT=3000
 NODE_ENV=development
-MAX_FILE_SIZE=5242880  # 5MB
-MAX_IMAGE_PIXELS=50000000  # 50MP
-SHARP_CONCURRENCY=4
+
+# Image Processing Configuration
+# Default Euclidean distance threshold for color matching
+# 0 = exact match only (default)
+# Higher values (e.g., 10-50) allow more color variation
+TOLERANCE=0
 ```
+
+### Tolerance Parameter
+
+The `TOLERANCE` environment variable controls how strictly colors must match the target background color:
+
+- **`TOLERANCE=0`** (default): Only exact color matches are removed
+- **`TOLERANCE=10`**: Removes colors within a small range (good for JPEG artifacts)
+- **`TOLERANCE=30`**: More aggressive removal (handles lighting variations)
+- **`TOLERANCE=50`**: Very aggressive (may remove similar colors unintentionally)
+
+The tolerance uses Euclidean distance in RGB space:
+```
+distance = √[(R₁-R₂)² + (G₁-G₂)² + (B₁-B₂)²]
+```
+
+**Recommended values:**
+- PNG images with solid backgrounds: `0-10`
+- JPEG images with compression artifacts: `10-20`
+- Images with lighting variations: `20-40`
 
 ## Project Structure
 

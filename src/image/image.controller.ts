@@ -22,6 +22,7 @@ import type { Response } from 'express';
 import { ColorParserService } from './services/color-parser/color-parser.service';
 import { ImageProcessingService } from './services/image-processing/image-processing.service';
 import { RemoveBackgroundDto } from './dto/remove-background.dto';
+import { AppConfigService } from '../config/app-config.service';
 
 @ApiTags('image')
 @Controller('image')
@@ -29,6 +30,7 @@ export class ImageController {
   constructor(
     private readonly colorParser: ColorParserService,
     private readonly imageProcessor: ImageProcessingService,
+    private readonly configService: AppConfigService,
   ) {}
 
   @Post('remove-background')
@@ -111,7 +113,10 @@ export class ImageController {
     // Process image
     const outputBuffer = await this.imageProcessor.removeBackground(
       file.buffer,
-      { backgroundColor },
+      {
+        backgroundColor,
+        tolerance: this.configService.tolerance,
+      },
     );
 
     // Set response headers
@@ -124,22 +129,5 @@ export class ImageController {
 
     // Send PNG file
     res.send(outputBuffer);
-  }
-
-  @Post('health')
-  @ApiOperation({
-    summary: 'Health check endpoint',
-    description: 'Check if image processing service is operational',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Service is healthy',
-  })
-  healthCheck() {
-    return {
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      service: 'image-processing',
-    };
   }
 }

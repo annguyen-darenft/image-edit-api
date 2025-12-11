@@ -8,7 +8,7 @@ import { RGBColor } from '../color-parser/color-parser.service';
 
 interface ProcessingOptions {
   backgroundColor: RGBColor;
-  tolerance?: number; // Future enhancement
+  tolerance?: number; // Euclidean distance threshold for color matching
 }
 
 interface RawPixelData {
@@ -62,7 +62,10 @@ export class ImageProcessingService {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error('Background removal failed', error instanceof Error ? error.stack : String(error));
+      this.logger.error(
+        'Background removal failed',
+        error instanceof Error ? error.stack : String(error),
+      );
       throw new InternalServerErrorException(
         'Failed to process image: ' + errorMessage,
       );
@@ -135,7 +138,7 @@ export class ImageProcessingService {
       );
     }
 
-    // Euclidean distance matching (future enhancement)
+    // Euclidean distance matching
     const distance = Math.sqrt(
       Math.pow(pixelColor.r - targetColor.r, 2) +
         Math.pow(pixelColor.g - targetColor.g, 2) +
