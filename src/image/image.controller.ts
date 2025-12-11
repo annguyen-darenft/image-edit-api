@@ -85,8 +85,8 @@ export class ImageController {
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({
-            maxSize: 5 * 1024 * 1024, // 5MB
-            message: 'File size must be less than 5MB',
+            maxSize: 10 * 1024 * 1024, // 10MB
+            message: 'File size must be less than 10MB',
           }),
           new FileTypeValidator({
             fileType: /(image\/jpeg|image\/png|image\/webp)/,

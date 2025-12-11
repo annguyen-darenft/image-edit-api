@@ -224,7 +224,7 @@ Visit http://localhost:3000/api/docs for interactive Swagger documentation.
 
 - Processes 1920x1080 images in < 2 seconds
 - Memory-efficient streaming with Sharp
-- File size limit: 5MB (configurable)
+- File size limit: 10MB (configurable)
 - Concurrent processing control
 
 ## Security
