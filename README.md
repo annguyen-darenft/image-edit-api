@@ -24,6 +24,21 @@ npm install
 
 ## Quick Start
 
+### Using Docker (Recommended)
+
+```bash
+# Build and start with Docker Compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the container
+docker-compose down
+```
+
+### Using Node.js
+
 ```bash
 # Development
 npm run start:dev
@@ -35,6 +50,7 @@ npm run start:prod
 
 API will be available at: http://localhost:3000
 Swagger docs: http://localhost:3000/api/docs
+Health check: http://localhost:3000/api/health
 
 ## API Usage
 
@@ -133,6 +149,52 @@ distance = √[(R₁-R₂)² + (G₁-G₂)² + (B₁-B₂)²]
 - PNG images with solid backgrounds: `0-10`
 - JPEG images with compression artifacts: `10-20`
 - Images with lighting variations: `20-40`
+
+## Docker Deployment
+
+### Docker Compose (Production)
+
+The project includes production-ready Docker configuration:
+
+```bash
+# Build and start
+docker-compose up -d
+
+# Check container status and health
+docker ps
+docker inspect nestjs-rembg-api --format='{{.State.Health.Status}}'
+
+# View logs
+docker-compose logs -f api
+
+# Stop and remove
+docker-compose down
+```
+
+### Docker Image Details
+
+- **Base Image**: `node:18-alpine`
+- **Image Size**: ~388MB (multi-stage build optimized)
+- **Sharp.js Support**: Native libvips dependencies included
+- **Security**: Runs as non-root user (UID 1001)
+- **Health Check**: Built-in health monitoring on `/api/health`
+
+### Environment Variables in Docker
+
+Override environment variables in `docker-compose.yml`:
+
+```yaml
+environment:
+  - NODE_ENV=production
+  - PORT=3000
+  - TOLERANCE=20  # Adjust tolerance as needed
+```
+
+### Resource Limits
+
+Default resource limits (configurable in `docker-compose.yml`):
+- CPU: 0.5-1 core
+- Memory: 256-512MB
 
 ## Project Structure
 
