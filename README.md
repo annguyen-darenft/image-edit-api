@@ -5,8 +5,10 @@ High-performance API for removing image backgrounds by color matching using Shar
 ## Features
 
 - 🎨 Multiple color format support (#FFF, rgb(), rgba(), named colors)
+- ✂️ Multiple region cropping with background generation
 - ⚡ Fast processing with libvips-powered Sharp.js
 - 📦 Handles JPEG, PNG, WebP inputs
+- 📊 Flexible response: JSON (base64) or ZIP file
 - 🔒 Secure file validation (MIME + file size limits)
 - 📝 Complete Swagger API documentation
 - ✅ Comprehensive test coverage
@@ -101,6 +103,141 @@ curl -X POST http://localhost:3000/api/image/remove-background \
 - **RGB:** `rgb(255, 255, 255)`, `rgb(255 255 255)`
 - **RGBA:** `rgba(255, 255, 255, 1.0)`, `rgba(255,255,255,0.5)`
 - **Named:** `white`, `black`, `red`, `green`, `blue`
+
+### Crop Regions
+
+**Endpoint:** `POST /api/image/crop-regions?format={json|zip}`
+
+**Request:**
+- Content-Type: `multipart/form-data`
+- Query Parameters:
+  - `format` (optional): Response format - `json` (default) or `zip`
+- Form Fields:
+  - `file` (required): Image file (JPEG, PNG, WebP)
+  - `regions` (required): JSON array of crop regions
+  - `includeBackground` (optional): Include background image (default: "true")
+
+**Response Formats:**
+
+**JSON format** (default, `format=json`):
+- Content-Type: `application/json`
+- JSON object containing:
+  - `croppedImages`: Array of cropped images with base64 data URLs
+  - `backgroundImage`: Background image with transparent regions (null if not included)
+  - `metadata`: Crop details and dimensions
+
+**ZIP format** (`format=zip`):
+- Content-Type: `application/zip`
+- ZIP file containing:
+  - `crop-1.png`, `crop-2.png`, etc. - Cropped images
+  - `background.png` - Original image with cropped regions transparent
+  - `metadata.json` - Crop details and dimensions
+
+### Example with curl
+
+```bash
+# JSON format (default) - Returns base64-encoded images
+curl -X POST http://localhost:3000/api/image/crop-regions \
+  -F "file=@input.jpg" \
+  -F 'regions=[{"position":{"x":100,"y":100},"size":{"w":200,"h":200}},{"position":{"x":400,"y":300},"size":{"w":150,"h":150}}]' \
+  | jq
+
+# Explicit JSON format
+curl -X POST "http://localhost:3000/api/image/crop-regions?format=json" \
+  -F "file=@input.jpg" \
+  -F 'regions=[{"position":{"x":0,"y":0},"size":{"w":100,"h":100}}]' \
+  -o response.json
+
+# ZIP format - Returns ZIP file with PNG images
+curl -X POST "http://localhost:3000/api/image/crop-regions?format=zip" \
+  -F "file=@input.jpg" \
+  -F 'regions=[{"position":{"x":0,"y":0},"size":{"w":100,"h":100}},{"position":{"x":200,"y":200},"size":{"w":150,"h":150}}]' \
+  -o cropped-images.zip
+
+# ZIP format without background image
+curl -X POST "http://localhost:3000/api/image/crop-regions?format=zip" \
+  -F "file=@input.png" \
+  -F 'regions=[{"position":{"x":0,"y":0},"size":{"w":100,"h":100}}]' \
+  -F "includeBackground=false" \
+  -o crops.zip
+```
+
+**Regions Format:**
+```json
+[
+  {
+    "position": { "x": 100, "y": 100 },
+    "size": { "w": 200, "h": 200 }
+  },
+  {
+    "position": { "x": 400, "y": 300 },
+    "size": { "w": 150, "h": 150 }
+  }
+]
+```
+
+**Response Format:**
+```json
+{
+  "croppedImages": [
+    {
+      "index": 0,
+      "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+      "position": { "x": 100, "y": 100 },
+      "size": { "width": 200, "height": 200 }
+    },
+    {
+      "index": 1,
+      "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+      "position": { "x": 400, "y": 300 },
+      "size": { "width": 150, "height": 150 }
+    }
+  ],
+  "backgroundImage": {
+    "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+  },
+  "metadata": {
+    "originalDimensions": { "width": 1920, "height": 1080 },
+    "totalRegions": 2,
+    "timestamp": "2025-12-12T16:15:00.000Z"
+  }
+}
+```
+
+**Using Base64 Images:**
+```javascript
+// In JavaScript/TypeScript
+const response = await fetch('/api/image/crop-regions', {
+  method: 'POST',
+  body: formData
+});
+const data = await response.json();
+
+// Use data URL directly in img tag
+document.querySelector('#crop1').src = data.croppedImages[0].data;
+
+// Or convert to Blob for download
+const base64 = data.croppedImages[0].data.split(',')[1];
+const blob = new Blob([Uint8Array.from(atob(base64), c => c.charCodeAt(0))],
+  { type: 'image/png' });
+```
+
+**Format Comparison:**
+
+| Feature | JSON (default) | ZIP |
+|---------|---------------|-----|
+| **Response Size** | ~33% larger (base64) | Smallest |
+| **Client Usage** | Direct in `<img>` tags | Need unzipping |
+| **Memory** | Higher (all in memory) | Lower (streaming) |
+| **Best For** | Web apps, small batches | Large batches, downloads |
+
+**Constraints:**
+- Minimum 1 region, maximum 20 regions per request
+- Coordinates and dimensions: 0-65535
+- Regions must be within image bounds
+- All coordinates must be positive integers
+- JSON format: Base64 increases payload size by ~33%
+- ZIP format: Streaming response, no extra memory overhead
 
 ## Testing
 
@@ -202,7 +339,8 @@ Default resource limits (configurable in `docker-compose.yml`):
 src/
 ├── image/
 │   ├── dto/
-│   │   └── remove-background.dto.ts
+│   │   ├── remove-background.dto.ts
+│   │   └── crop-image.dto.ts
 │   ├── services/
 │   │   ├── color-parser/
 │   │   │   ├── color-parser.service.ts
@@ -211,7 +349,12 @@ src/
 │   │       ├── image-processing.service.ts
 │   │       └── image-processing.service.spec.ts
 │   ├── image.controller.ts
-│   └── image.module.ts
+│   ├── image.module.ts
+│   └── image.constants.ts
+├── config/
+│   ├── app-config.service.ts
+│   ├── config.module.ts
+│   └── env.validation.ts
 ├── app.module.ts
 └── main.ts
 ```
@@ -224,8 +367,12 @@ Visit http://localhost:3000/api/docs for interactive Swagger documentation.
 
 - Processes 1920x1080 images in < 2 seconds
 - Memory-efficient streaming with Sharp
+- Parallel crop processing for multiple regions
 - File size limit: 10MB (configurable)
-- Concurrent processing control
+- Maximum 20 crop regions per request
+- Flexible response formats:
+  - **JSON**: Base64-encoded images (~33% overhead), best for web apps
+  - **ZIP**: Streaming compression, best for large batches or downloads
 
 ## Security
 

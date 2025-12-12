@@ -5,10 +5,37 @@ import {
 } from '@nestjs/common';
 import sharp from 'sharp';
 import { RGBColor } from '../color-parser/color-parser.service';
+import { IMAGE_CONSTANTS } from '../../image.constants';
 
 interface ProcessingOptions {
   backgroundColor: RGBColor;
   tolerance?: number; // Euclidean distance threshold for color matching
+}
+
+export interface CropRegion {
+  position: { x: number; y: number };
+  size: { w: number; h: number };
+}
+
+export interface CropResult {
+  croppedImages: Buffer[];
+  backgroundImage: Buffer | null;
+  metadata: {
+    originalDimensions: { width: number; height: number };
+    croppedRegions: Array<{
+      index: number;
+      position: { x: number; y: number };
+      size: { width: number; height: number };
+    }>;
+  };
+}
+
+/**
+ * Convert buffer to base64 data URL
+ */
+export function bufferToDataUrl(buffer: Buffer): string {
+  const base64 = buffer.toString('base64');
+  return `data:image/png;base64,${base64}`;
 }
 
 interface RawPixelData {
@@ -164,9 +191,174 @@ export class ImageProcessingService {
       },
     })
       .png({
-        compressionLevel: 9, // Maximum compression
-        quality: 100,
+        compressionLevel: IMAGE_CONSTANTS.PNG_COMPRESSION_LEVEL,
+        quality: IMAGE_CONSTANTS.PNG_QUALITY,
       })
       .toBuffer();
+  }
+
+  /**
+   * Crop multiple regions from image and optionally generate background
+   */
+  async cropRegions(
+    imageBuffer: Buffer,
+    regions: CropRegion[],
+    includeBackground: boolean = true,
+  ): Promise<CropResult> {
+    try {
+      this.logger.log(`Starting crop operation for ${regions.length} regions`);
+      const startTime = Date.now();
+
+      // Get image metadata to validate regions
+      const metadata = await sharp(imageBuffer).metadata();
+      const { width, height } = metadata;
+
+      if (!width || !height) {
+        throw new Error('Unable to determine image dimensions');
+      }
+
+      // Validate all regions against image dimensions
+      this.validateCropRegions(regions, width, height);
+
+      // Crop all regions in parallel using separate Sharp instances
+      const croppedImages = await Promise.all(
+        regions.map((region, index) =>
+          this.extractCropRegion(imageBuffer, region, index),
+        ),
+      );
+
+      // Generate background image with transparent cropped regions
+      let backgroundImage: Buffer | null = null;
+      if (includeBackground) {
+        backgroundImage = await this.generateBackgroundWithTransparency(
+          imageBuffer,
+          regions,
+          width,
+          height,
+        );
+      }
+
+      const duration = Date.now() - startTime;
+      this.logger.log(`Crop operation completed in ${duration}ms`);
+
+      return {
+        croppedImages,
+        backgroundImage,
+        metadata: {
+          originalDimensions: { width, height },
+          croppedRegions: regions.map((region, index) => ({
+            index,
+            position: region.position,
+            size: { width: region.size.w, height: region.size.h },
+          })),
+        },
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        'Crop operation failed',
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new InternalServerErrorException(
+        'Failed to crop image: ' + errorMessage,
+      );
+    }
+  }
+
+  /**
+   * Validate crop regions against image dimensions
+   */
+  private validateCropRegions(
+    regions: CropRegion[],
+    imageWidth: number,
+    imageHeight: number,
+  ): void {
+    regions.forEach((region, index) => {
+      const { x, y } = region.position;
+      const { w, h } = region.size;
+
+      if (x < 0 || y < 0) {
+        throw new Error(
+          `Region ${index}: Position cannot be negative (x: ${x}, y: ${y})`,
+        );
+      }
+
+      if (w <= 0 || h <= 0) {
+        throw new Error(
+          `Region ${index}: Size must be positive (w: ${w}, h: ${h})`,
+        );
+      }
+
+      if (x + w > imageWidth) {
+        throw new Error(
+          `Region ${index}: Crop extends beyond image width (x: ${x}, w: ${w}, image width: ${imageWidth})`,
+        );
+      }
+
+      if (y + h > imageHeight) {
+        throw new Error(
+          `Region ${index}: Crop extends beyond image height (y: ${y}, h: ${h}, image height: ${imageHeight})`,
+        );
+      }
+    });
+  }
+
+  /**
+   * Extract single crop region from image
+   */
+  private async extractCropRegion(
+    imageBuffer: Buffer,
+    region: CropRegion,
+    index: number,
+  ): Promise<Buffer> {
+    this.logger.log(
+      `Extracting region ${index}: (${region.position.x}, ${region.position.y}) ${region.size.w}x${region.size.h}`,
+    );
+
+    return sharp(imageBuffer)
+      .extract({
+        left: region.position.x,
+        top: region.position.y,
+        width: region.size.w,
+        height: region.size.h,
+      })
+      .png({
+        compressionLevel: IMAGE_CONSTANTS.PNG_COMPRESSION_LEVEL,
+        quality: IMAGE_CONSTANTS.PNG_QUALITY,
+      })
+      .toBuffer();
+  }
+
+  /**
+   * Generate background image with cropped regions marked as transparent
+   */
+  private async generateBackgroundWithTransparency(
+    imageBuffer: Buffer,
+    regions: CropRegion[],
+    width: number,
+    height: number,
+  ): Promise<Buffer> {
+    this.logger.log('Generating background image with transparent regions');
+
+    // Extract raw RGBA pixel data
+    const { data, info } = await this.extractRawPixels(imageBuffer);
+
+    // Mark pixels in crop regions as transparent
+    for (const region of regions) {
+      const { x, y } = region.position;
+      const { w, h } = region.size;
+
+      // Iterate through pixels in this region
+      for (let row = y; row < y + h && row < height; row++) {
+        for (let col = x; col < x + w && col < width; col++) {
+          const pixelIndex = (row * width + col) * 4;
+          data[pixelIndex + 3] = 0; // Set alpha to transparent
+        }
+      }
+    }
+
+    // Build PNG from modified pixel data
+    return this.buildPngFromRaw(data, info.width, info.height);
   }
 }
