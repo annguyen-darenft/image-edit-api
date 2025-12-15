@@ -23,14 +23,23 @@ import {
 } from '@nestjs/swagger';
 import type { Response } from 'express';
 import archiver from 'archiver';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { ColorParserService } from './services/color-parser/color-parser.service';
 import {
   ImageProcessingService,
   bufferToDataUrl,
 } from './services/image-processing/image-processing.service';
+import { GeminiService } from './services/gemini/gemini.service';
+import { BoundingBoxTransformService } from './services/bounding-box-transform/bounding-box-transform.service';
 import { RemoveBackgroundDto } from './dto/remove-background.dto';
 import { CropImageDto, CropResponseFormat } from './dto/crop-image.dto';
 import { CropRegionsResponseDto } from './dto/crop-response.dto';
+import {
+  DetectBoundingBoxesDto,
+  ObjectDescriptionDto,
+} from './dto/detect-bounding-boxes.dto';
+import { DetectBoundingBoxesResponseDto } from './dto/bounding-box-response.dto';
 import { AppConfigService } from '../config/app-config.service';
 import {
   IMAGE_CONSTANTS,
@@ -45,6 +54,8 @@ export class ImageController {
   constructor(
     private readonly colorParser: ColorParserService,
     private readonly imageProcessor: ImageProcessingService,
+    private readonly geminiService: GeminiService,
+    private readonly boundingBoxTransformService: BoundingBoxTransformService,
     private readonly configService: AppConfigService,
   ) {}
 
@@ -330,6 +341,119 @@ export class ImageController {
         totalRegions: result.metadata.croppedRegions.length,
         timestamp: new Date().toISOString(),
       },
+    };
+  }
+
+  @Post('detect-bounding-boxes')
+  @ApiOperation({
+    summary: 'Detect bounding boxes of objects in image using Gemini AI',
+    description:
+      'Upload a comic image and specify objects to detect with Vietnamese descriptions. Returns bounding box coordinates in absolute pixels.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Image file (JPEG, PNG, WebP)',
+        },
+        objects: {
+          type: 'string',
+          description: 'JSON array of object descriptions',
+          example: JSON.stringify([
+            {
+              name: 'cậu bé',
+              description: 'cậu bé, tóc đen, đi chân đất, quấn khăn trên đầu',
+            },
+            {
+              name: 'bà cụ',
+              description:
+                'bà cụ tóc trắng, đi chân đất, đang cầm thanh sắt mài vào tảng đá',
+            },
+          ]),
+        },
+        imageSize: {
+          type: 'string',
+          description: 'JSON object with image dimensions',
+          example: JSON.stringify({ width: 2047, height: 1535 }),
+        },
+      },
+      required: ['file', 'objects', 'imageSize'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Bounding boxes detected successfully',
+    type: DetectBoundingBoxesResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid file, objects, or image size',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Gemini API error or processing failed',
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  async detectBoundingBoxes(
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: IMAGE_CONSTANTS.MAX_FILE_SIZE_BYTES,
+            message: `File size must be less than ${IMAGE_CONSTANTS.MAX_FILE_SIZE_BYTES / (1024 * 1024)}MB`,
+          }),
+          new FileTypeValidator({
+            fileType: SUPPORTED_IMAGE_TYPES,
+          }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+    @Body('objects') objectsJson: string,
+    @Body('imageSize') imageSizeJson: string,
+  ): Promise<DetectBoundingBoxesResponseDto> {
+    // Parse and validate DTO
+    let dto: DetectBoundingBoxesDto;
+    try {
+      const objects = JSON.parse(objectsJson);
+      const imageSize = JSON.parse(imageSizeJson);
+      dto = plainToInstance(DetectBoundingBoxesDto, { objects, imageSize });
+
+      const errors = await validate(dto);
+      if (errors.length > 0) {
+        throw new BadRequestException(
+          errors.map((e) => Object.values(e.constraints || {})).flat(),
+        );
+      }
+    } catch (error) {
+      throw new BadRequestException(
+        'Invalid JSON format: ' +
+          (error instanceof Error ? error.message : 'Parse error'),
+      );
+    }
+
+    // Detect bounding boxes with Gemini
+    const geminiBoundingBoxes = await this.geminiService.detectBoundingBoxes(
+      file.buffer,
+      dto.objects,
+      file.mimetype,
+    );
+
+    // Transform to API format
+    const boundingBoxes = this.boundingBoxTransformService.transform(
+      geminiBoundingBoxes,
+      dto.objects,
+      dto.imageSize,
+    );
+
+    return {
+      boundingBoxes,
+      totalDetected: boundingBoxes.length,
+      timestamp: new Date().toISOString(),
     };
   }
 }

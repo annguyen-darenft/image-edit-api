@@ -1,4 +1,4 @@
-import { IsNumber, IsEnum, Min, Max, IsOptional } from 'class-validator';
+import { IsNumber, IsEnum, IsString, Min, Max, IsOptional } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 
@@ -24,6 +24,20 @@ export class EnvironmentVariables {
   @Max(255)
   @IsOptional()
   TOLERANCE: number = 0;
+
+  @IsString()
+  @IsOptional()
+  GOOGLE_GEMINI_API_KEY?: string;
+
+  @IsString()
+  @IsOptional()
+  GEMINI_MODEL: string = 'gemini-3-pro-preview';
+
+  @IsNumber()
+  @Min(1000)
+  @Max(60000)
+  @IsOptional()
+  GEMINI_API_TIMEOUT: number = 30000;
 }
 
 export function validate(config: Record<string, unknown>) {

@@ -239,6 +239,90 @@ const blob = new Blob([Uint8Array.from(atob(base64), c => c.charCodeAt(0))],
 - JSON format: Base64 increases payload size by ~33%
 - ZIP format: Streaming response, no extra memory overhead
 
+### Detect Bounding Boxes with Gemini AI
+
+**Endpoint:** `POST /api/image/detect-bounding-boxes`
+
+Detect objects in comic images using Google Gemini 3 Pro vision AI with custom Vietnamese descriptions. Returns bounding box coordinates in absolute pixels.
+
+**Request:**
+- Content-Type: `multipart/form-data`
+- Fields:
+  - `file` (required): Image file (JPEG, PNG, WebP, max 10MB)
+  - `objects` (required): JSON array of objects to detect with Vietnamese descriptions
+  - `imageSize` (required): JSON object with actual image dimensions (`width` and `height`)
+
+**Response:**
+- Content-Type: `application/json`
+- Bounding boxes with absolute pixel coordinates
+
+### Example with curl
+
+```bash
+curl -X POST http://localhost:3000/api/image/detect-bounding-boxes \
+  -F "file=@comic.jpg" \
+  -F 'objects=[
+    {
+      "name": "cậu bé",
+      "description": "cậu bé, tóc đen, đi chân đất, quấn khăn trên đầu"
+    },
+    {
+      "name": "bà cụ",
+      "description": "bà cụ tóc trắng, đi chân đất, đang cầm thanh sắt mài vào tảng đá"
+    }
+  ]' \
+  -F 'imageSize={"width":2047,"height":1535}' \
+  | jq
+```
+
+**Response Format:**
+```json
+{
+  "boundingBoxes": [
+    {
+      "object": "cậu bé",
+      "position": { "x": 245, "y": 180 },
+      "size": { "w": 320, "h": 580 }
+    },
+    {
+      "object": "bà cụ",
+      "position": { "x": 890, "y": 220 },
+      "size": { "w": 280, "h": 540 }
+    }
+  ],
+  "totalDetected": 2,
+  "timestamp": "2025-12-15T11:30:00.000Z"
+}
+```
+
+**Coordinate System:**
+- `position.x`: X coordinate from left edge (pixels)
+- `position.y`: Y coordinate from top edge (pixels)
+- `size.w`: Width in pixels
+- `size.h`: Height in pixels
+
+**Detection Requirements:**
+Each bounding box includes:
+- Entire body of the character
+- Shadow on the ground
+- Any objects the character is holding or directly interacting with
+
+**Constraints:**
+- Minimum 1 object, maximum 25 objects per request (Gemini API limit)
+- Image size must match actual uploaded file dimensions
+- All object names and descriptions in Vietnamese
+- Processing time: typically < 5 seconds for 2MP images
+
+**Configuration:**
+Set up your Gemini API key in `.env`:
+
+```bash
+# Get your API key from: https://aistudio.google.com/apikey
+GOOGLE_GEMINI_API_KEY=your_api_key_here
+GEMINI_MODEL=gemini-3-pro-preview
+GEMINI_API_TIMEOUT=30000
+```
+
 ## Testing
 
 ```bash

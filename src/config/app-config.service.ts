@@ -44,4 +44,43 @@ export class AppConfigService {
   get nodeEnv(): string {
     return this.configService.get<string>('NODE_ENV', 'development');
   }
+
+  /**
+   * Get Gemini API key
+   * @throws Error if API key is not configured
+   */
+  get geminiApiKey(): string {
+    const value = this.configService.get<string>('GOOGLE_GEMINI_API_KEY');
+
+    if (!value) {
+      throw new Error(
+        'GOOGLE_GEMINI_API_KEY is not configured. Get your API key from https://aistudio.google.com/apikey',
+      );
+    }
+
+    return value;
+  }
+
+  /**
+   * Get Gemini model name
+   */
+  get geminiModel(): string {
+    return this.configService.get<string>('GEMINI_MODEL', 'gemini-3-pro-preview');
+  }
+
+  /**
+   * Get Gemini API timeout in milliseconds
+   */
+  get geminiTimeout(): number {
+    const value = this.configService.get('GEMINI_API_TIMEOUT', '30000');
+    const parsed = parseInt(value as string, 10);
+
+    if (isNaN(parsed) || parsed < 1000 || parsed > 60000) {
+      throw new Error(
+        `Invalid GEMINI_API_TIMEOUT value: ${value}. Must be between 1000-60000ms`,
+      );
+    }
+
+    return parsed;
+  }
 }
