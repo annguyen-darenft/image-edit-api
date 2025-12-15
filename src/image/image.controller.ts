@@ -41,10 +41,7 @@ import {
 } from './dto/detect-bounding-boxes.dto';
 import { DetectBoundingBoxesResponseDto } from './dto/bounding-box-response.dto';
 import { AppConfigService } from '../config/app-config.service';
-import {
-  IMAGE_CONSTANTS,
-  SUPPORTED_IMAGE_TYPES,
-} from './image.constants';
+import { IMAGE_CONSTANTS, SUPPORTED_IMAGE_TYPES } from './image.constants';
 
 @ApiTags('image')
 @Controller('image')
@@ -182,14 +179,15 @@ export class ImageController {
         regions: {
           type: 'string',
           description:
-            'JSON array of crop regions with position {x, y} and size {w, h}',
+            'JSON array of crop regions with position {x, y}, size {w, h}, and optional object identifier',
           example:
-            '[{"position":{"x":0,"y":0},"size":{"w":100,"h":100}},{"position":{"x":200,"y":200},"size":{"w":150,"h":150}}]',
+            '[{"position":{"x":0,"y":0},"size":{"w":100,"h":100},"object":"cậu bé"},{"position":{"x":200,"y":200},"size":{"w":150,"h":150},"object":"bà cụ"}]',
         },
         includeBackground: {
           type: 'string',
           default: 'true',
-          description: 'Include background image with transparent cropped regions',
+          description:
+            'Include background image with transparent cropped regions',
         },
       },
       required: ['file', 'regions'],
@@ -258,7 +256,9 @@ export class ImageController {
     // Handle ZIP format
     if (format === CropResponseFormat.ZIP) {
       if (!res) {
-        throw new BadRequestException('Response object is required for ZIP format');
+        throw new BadRequestException(
+          'Response object is required for ZIP format',
+        );
       }
 
       // Create ZIP archive
@@ -324,6 +324,7 @@ export class ImageController {
     // Handle JSON format (default)
     const croppedImages = result.croppedImages.map((buffer, index) => ({
       index,
+      object: result.metadata.croppedRegions[index].object,
       data: bufferToDataUrl(buffer),
       position: result.metadata.croppedRegions[index].position,
       size: result.metadata.croppedRegions[index].size,
@@ -333,7 +334,7 @@ export class ImageController {
       ? { data: bufferToDataUrl(result.backgroundImage) }
       : null;
 
-    return {
+    const apiResult = {
       croppedImages,
       backgroundImage,
       metadata: {
@@ -342,6 +343,10 @@ export class ImageController {
         timestamp: new Date().toISOString(),
       },
     };
+    if (res) res.json(apiResult);
+    else {
+      return apiResult;
+    }
   }
 
   @Post('detect-bounding-boxes')

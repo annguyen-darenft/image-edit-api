@@ -13,6 +13,7 @@ interface ProcessingOptions {
 }
 
 export interface CropRegion {
+  object: string;
   position: { x: number; y: number };
   size: { w: number; h: number };
 }
@@ -23,6 +24,7 @@ export interface CropResult {
   metadata: {
     originalDimensions: { width: number; height: number };
     croppedRegions: Array<{
+      object: string;
       index: number;
       position: { x: number; y: number };
       size: { width: number; height: number };
@@ -248,6 +250,7 @@ export class ImageProcessingService {
           originalDimensions: { width, height },
           croppedRegions: regions.map((region, index) => ({
             index,
+            object: region.object,
             position: region.position,
             size: { width: region.size.w, height: region.size.h },
           })),

@@ -160,6 +160,12 @@ curl -X POST "http://localhost:3000/api/image/crop-regions?format=zip" \
   -F 'regions=[{"position":{"x":0,"y":0},"size":{"w":100,"h":100}}]' \
   -F "includeBackground=false" \
   -o crops.zip
+
+# With object identifiers (from detect-bounding-boxes)
+curl -X POST http://localhost:3000/api/image/crop-regions \
+  -F "file=@comic.jpg" \
+  -F 'regions=[{"position":{"x":245,"y":180},"size":{"w":320,"h":580},"object":"cậu bé"},{"position":{"x":890,"y":220},"size":{"w":280,"h":540},"object":"bà cụ"}]' \
+  | jq
 ```
 
 **Regions Format:**
@@ -167,14 +173,18 @@ curl -X POST "http://localhost:3000/api/image/crop-regions?format=zip" \
 [
   {
     "position": { "x": 100, "y": 100 },
-    "size": { "w": 200, "h": 200 }
+    "size": { "w": 200, "h": 200 },
+    "object": "cậu bé"
   },
   {
     "position": { "x": 400, "y": 300 },
-    "size": { "w": 150, "h": 150 }
+    "size": { "w": 150, "h": 150 },
+    "object": "bà cụ"
   }
 ]
 ```
+
+**Note:** The `object` property is optional and can be used to link crop regions with `detect-bounding-boxes` results. When provided, it will be included in the response to identify each cropped image.
 
 **Response Format:**
 ```json
@@ -184,13 +194,15 @@ curl -X POST "http://localhost:3000/api/image/crop-regions?format=zip" \
       "index": 0,
       "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
       "position": { "x": 100, "y": 100 },
-      "size": { "width": 200, "height": 200 }
+      "size": { "width": 200, "height": 200 },
+      "object": "cậu bé"
     },
     {
       "index": 1,
       "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
       "position": { "x": 400, "y": 300 },
-      "size": { "width": 150, "height": 150 }
+      "size": { "width": 150, "height": 150 },
+      "object": "bà cụ"
     }
   ],
   "backgroundImage": {
@@ -312,6 +324,29 @@ Each bounding box includes:
 - Image dimensions automatically detected from uploaded file
 - All object names and descriptions in Vietnamese
 - Processing time: typically < 10 minutes for 2MP images
+
+### Workflow: Detect and Crop Objects
+
+Combine `detect-bounding-boxes` and `crop-regions` APIs to automatically detect and extract objects:
+
+```bash
+# Step 1: Detect bounding boxes
+curl -X POST http://localhost:3000/api/image/detect-bounding-boxes \
+  -F "file=@comic.jpg" \
+  -F 'objects=[
+    {"name":"cậu bé","description":"cậu bé, tóc đen, đi chân đất, quấn khăn trên đầu"},
+    {"name":"bà cụ","description":"bà cụ tóc trắng, đi chân đất, đang cầm thanh sắt mài vào tảng đá"}
+  ]' > bboxes.json
+
+# Step 2: Extract boundingBoxes array from response and use as regions for cropping
+# The bounding boxes already include position {x, y}, size {w, h}, and object name
+curl -X POST http://localhost:3000/api/image/crop-regions \
+  -F "file=@comic.jpg" \
+  -F "regions=$(cat bboxes.json | jq -c '.boundingBoxes')" \
+  | jq
+```
+
+**Result:** Cropped images with object identifiers matching the detected objects.
 
 **Configuration:**
 Set up your Gemini API key in `.env`:

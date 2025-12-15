@@ -24,6 +24,13 @@ export class CroppedImageDto {
     example: { width: 200, height: 200 },
   })
   size: { width: number; height: number };
+
+  @ApiProperty({
+    description: 'Object identifier (optional, from detect-bounding-boxes results)',
+    example: 'cậu bé',
+    required: false,
+  })
+  object?: string;
 }
 
 export class BackgroundImageDto {

@@ -5,10 +5,13 @@ import {
   IsOptional,
   IsBoolean,
   IsEnum,
+  IsString,
   ArrayMinSize,
   ArrayMaxSize,
   Max,
   Min,
+  MaxLength,
+  MinLength,
   ValidateNested,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
@@ -82,6 +85,19 @@ export class CropRegionDto {
   @ValidateNested()
   @Type(() => CropSizeDto)
   size: CropSizeDto;
+
+  @ApiProperty({
+    description:
+      'Object identifier (optional, for linking with detect-bounding-boxes results)',
+    example: 'cậu bé',
+    required: false,
+    maxLength: 255,
+    minLength: 1,
+  })
+  @IsString()
+  @MaxLength(255)
+  @MinLength(1)
+  object: string;
 }
 
 export class CropImageDto {
@@ -103,7 +119,8 @@ export class CropImageDto {
   regions: CropRegionDto[];
 
   @ApiProperty({
-    description: 'Whether to include background image with cropped regions marked',
+    description:
+      'Whether to include background image with cropped regions marked',
     example: true,
     default: true,
     required: false,
