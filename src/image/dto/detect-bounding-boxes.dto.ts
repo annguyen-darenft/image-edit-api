@@ -3,10 +3,7 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsNotEmpty,
-  IsNumber,
   IsString,
-  Min,
-  Max,
   ValidateNested,
   ArrayMinSize,
   ArrayMaxSize,
@@ -30,30 +27,6 @@ export class ObjectDescriptionDto {
   description: string;
 }
 
-export class ImageSizeDto {
-  @ApiProperty({
-    description: 'Image width in pixels',
-    example: 2047,
-    minimum: 1,
-    maximum: 10000,
-  })
-  @IsNumber()
-  @Min(1)
-  @Max(10000)
-  width: number;
-
-  @ApiProperty({
-    description: 'Image height in pixels',
-    example: 1535,
-    minimum: 1,
-    maximum: 10000,
-  })
-  @IsNumber()
-  @Min(1)
-  @Max(10000)
-  height: number;
-}
-
 export class DetectBoundingBoxesDto {
   @ApiProperty({
     description: 'List of objects to detect',
@@ -67,12 +40,4 @@ export class DetectBoundingBoxesDto {
   @ValidateNested({ each: true })
   @Type(() => ObjectDescriptionDto)
   objects: ObjectDescriptionDto[];
-
-  @ApiProperty({
-    description: 'Original image dimensions',
-    type: ImageSizeDto,
-  })
-  @ValidateNested()
-  @Type(() => ImageSizeDto)
-  imageSize: ImageSizeDto;
 }

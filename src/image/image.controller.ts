@@ -375,13 +375,8 @@ export class ImageController {
             },
           ]),
         },
-        imageSize: {
-          type: 'string',
-          description: 'JSON object with image dimensions',
-          example: JSON.stringify({ width: 2047, height: 1535 }),
-        },
       },
-      required: ['file', 'objects', 'imageSize'],
+      required: ['file', 'objects'],
     },
   })
   @ApiResponse({
@@ -414,14 +409,12 @@ export class ImageController {
     )
     file: Express.Multer.File,
     @Body('objects') objectsJson: string,
-    @Body('imageSize') imageSizeJson: string,
   ): Promise<DetectBoundingBoxesResponseDto> {
     // Parse and validate DTO
     let dto: DetectBoundingBoxesDto;
     try {
       const objects = JSON.parse(objectsJson);
-      const imageSize = JSON.parse(imageSizeJson);
-      dto = plainToInstance(DetectBoundingBoxesDto, { objects, imageSize });
+      dto = plainToInstance(DetectBoundingBoxesDto, { objects });
 
       const errors = await validate(dto);
       if (errors.length > 0) {
@@ -436,6 +429,25 @@ export class ImageController {
       );
     }
 
+    // Extract image dimensions from uploaded file
+    const sharp = (await import('sharp')).default;
+    const metadata = await sharp(file.buffer).metadata();
+
+    if (!metadata.width || !metadata.height) {
+      throw new BadRequestException(
+        'Failed to extract image dimensions from uploaded file',
+      );
+    }
+
+    const imageSize = {
+      width: metadata.width,
+      height: metadata.height,
+    };
+
+    this.logger.log(
+      `Processing image: ${imageSize.width}x${imageSize.height}, ${dto.objects.length} objects`,
+    );
+
     // Detect bounding boxes with Gemini
     const geminiBoundingBoxes = await this.geminiService.detectBoundingBoxes(
       file.buffer,
@@ -447,7 +459,7 @@ export class ImageController {
     const boundingBoxes = this.boundingBoxTransformService.transform(
       geminiBoundingBoxes,
       dto.objects,
-      dto.imageSize,
+      imageSize,
     );
 
     return {

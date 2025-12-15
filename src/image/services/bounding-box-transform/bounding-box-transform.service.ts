@@ -1,10 +1,16 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import type { BoundingBoxDto } from '../../dto/bounding-box-response.dto';
-import type {
-  ObjectDescriptionDto,
-  ImageSizeDto,
-} from '../../dto/detect-bounding-boxes.dto';
+import type { ObjectDescriptionDto } from '../../dto/detect-bounding-boxes.dto';
 import type { GeminiBoundingBox } from '../gemini/gemini.service';
+
+export interface ImageSize {
+  width: number;
+  height: number;
+}
 
 @Injectable()
 export class BoundingBoxTransformService {
@@ -23,7 +29,7 @@ export class BoundingBoxTransformService {
   transform(
     geminiBoundingBoxes: GeminiBoundingBox[],
     objectDescriptions: ObjectDescriptionDto[],
-    imageSize: ImageSizeDto,
+    imageSize: ImageSize,
   ): BoundingBoxDto[] {
     return geminiBoundingBoxes.map((geminiBox) => {
       // Find matching object description
@@ -103,31 +109,31 @@ export class BoundingBoxTransformService {
    * @param w Width in pixels
    * @param h Height in pixels
    * @param imageSize Image dimensions
-   * @throws BadRequestException if bounding box is invalid or out of bounds
+   * @throws InternalServerErrorException if bounding box from Gemini is invalid
    */
   private validateBounds(
     x: number,
     y: number,
     w: number,
     h: number,
-    imageSize: ImageSizeDto,
+    imageSize: ImageSize,
   ): void {
     if (x < 0 || y < 0) {
-      throw new BadRequestException(
-        `Bounding box position cannot be negative (x: ${x}, y: ${y})`,
+      throw new InternalServerErrorException(
+        `Invalid bounding box from Gemini: negative position (x: ${x}, y: ${y})`,
       );
     }
 
     if (x + w > imageSize.width || y + h > imageSize.height) {
-      throw new BadRequestException(
-        `Bounding box exceeds image bounds (${imageSize.width}x${imageSize.height}): ` +
+      throw new InternalServerErrorException(
+        `Invalid bounding box from Gemini: exceeds image bounds (${imageSize.width}x${imageSize.height}) - ` +
           `position (${x}, ${y}) + size (${w}, ${h}) = (${x + w}, ${y + h})`,
       );
     }
 
     if (w <= 0 || h <= 0) {
-      throw new BadRequestException(
-        `Bounding box size must be positive (w: ${w}, h: ${h})`,
+      throw new InternalServerErrorException(
+        `Invalid bounding box from Gemini: non-positive size (w: ${w}, h: ${h})`,
       );
     }
   }

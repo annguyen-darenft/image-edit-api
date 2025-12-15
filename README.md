@@ -250,11 +250,12 @@ Detect objects in comic images using Google Gemini 3 Pro vision AI with custom V
 - Fields:
   - `file` (required): Image file (JPEG, PNG, WebP, max 10MB)
   - `objects` (required): JSON array of objects to detect with Vietnamese descriptions
-  - `imageSize` (required): JSON object with actual image dimensions (`width` and `height`)
 
 **Response:**
 - Content-Type: `application/json`
 - Bounding boxes with absolute pixel coordinates
+
+**Note:** Image dimensions are automatically extracted from the uploaded file.
 
 ### Example with curl
 
@@ -271,7 +272,6 @@ curl -X POST http://localhost:3000/api/image/detect-bounding-boxes \
       "description": "bà cụ tóc trắng, đi chân đất, đang cầm thanh sắt mài vào tảng đá"
     }
   ]' \
-  -F 'imageSize={"width":2047,"height":1535}' \
   | jq
 ```
 
@@ -309,9 +309,9 @@ Each bounding box includes:
 
 **Constraints:**
 - Minimum 1 object, maximum 25 objects per request (Gemini API limit)
-- Image size must match actual uploaded file dimensions
+- Image dimensions automatically detected from uploaded file
 - All object names and descriptions in Vietnamese
-- Processing time: typically < 5 seconds for 2MP images
+- Processing time: typically < 10 minutes for 2MP images
 
 **Configuration:**
 Set up your Gemini API key in `.env`:
@@ -320,7 +320,7 @@ Set up your Gemini API key in `.env`:
 # Get your API key from: https://aistudio.google.com/apikey
 GOOGLE_GEMINI_API_KEY=your_api_key_here
 GEMINI_MODEL=gemini-3-pro-preview
-GEMINI_API_TIMEOUT=30000
+GEMINI_API_TIMEOUT=600000
 ```
 
 ## Testing

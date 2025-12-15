@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BoundingBoxTransformService } from './bounding-box-transform.service';
-import { BadRequestException } from '@nestjs/common';
+import { InternalServerErrorException } from '@nestjs/common';
 
 describe('BoundingBoxTransformService', () => {
   let service: BoundingBoxTransformService;
@@ -94,7 +94,7 @@ describe('BoundingBoxTransformService', () => {
 
       expect(() => {
         service.transform(geminiBoundingBoxes, objectDescriptions, imageSize);
-      }).toThrow(BadRequestException);
+      }).toThrow(InternalServerErrorException);
     });
 
     it('should throw error for negative coordinates', () => {
@@ -110,7 +110,7 @@ describe('BoundingBoxTransformService', () => {
 
       expect(() => {
         service.transform(geminiBoundingBoxes, objectDescriptions, imageSize);
-      }).toThrow(BadRequestException);
+      }).toThrow(InternalServerErrorException);
     });
 
     it('should throw error for zero or negative size', () => {
@@ -126,7 +126,7 @@ describe('BoundingBoxTransformService', () => {
 
       expect(() => {
         service.transform(geminiBoundingBoxes, objectDescriptions, imageSize);
-      }).toThrow(BadRequestException);
+      }).toThrow(InternalServerErrorException);
     });
   });
 

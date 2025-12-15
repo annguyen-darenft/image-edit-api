@@ -65,19 +65,22 @@ export class AppConfigService {
    * Get Gemini model name
    */
   get geminiModel(): string {
-    return this.configService.get<string>('GEMINI_MODEL', 'gemini-3-pro-preview');
+    return this.configService.get<string>(
+      'GEMINI_MODEL',
+      'gemini-3-pro-preview',
+    );
   }
 
   /**
    * Get Gemini API timeout in milliseconds
    */
   get geminiTimeout(): number {
-    const value = this.configService.get('GEMINI_API_TIMEOUT', '30000');
+    const value = this.configService.get('GEMINI_API_TIMEOUT', '600000');
     const parsed = parseInt(value as string, 10);
 
-    if (isNaN(parsed) || parsed < 1000 || parsed > 60000) {
+    if (isNaN(parsed) || parsed < 1000 || parsed > 600000) {
       throw new Error(
-        `Invalid GEMINI_API_TIMEOUT value: ${value}. Must be between 1000-60000ms`,
+        `Invalid GEMINI_API_TIMEOUT value: ${value}. Must be between 1000-600000ms`,
       );
     }
 
