@@ -32,6 +32,7 @@ import {
 } from './services/image-processing/image-processing.service';
 import { GeminiService } from './services/gemini/gemini.service';
 import { BoundingBoxTransformService } from './services/bounding-box-transform/bounding-box-transform.service';
+import { ReplicateService } from './services/replicate/replicate.service';
 import { RemoveBackgroundDto } from './dto/remove-background.dto';
 import { CropImageDto, CropResponseFormat } from './dto/crop-image.dto';
 import { CropRegionsResponseDto } from './dto/crop-response.dto';
@@ -40,6 +41,8 @@ import {
   ObjectDescriptionDto,
 } from './dto/detect-bounding-boxes.dto';
 import { DetectBoundingBoxesResponseDto } from './dto/bounding-box-response.dto';
+import { Sam2SegmentationDto, ResponseFormat } from './dto/sam2-segmentation.dto';
+import { Sam2SegmentationResponseDto, SegmentationMaskDto, CombinedMaskDto } from './dto/sam2-response.dto';
 import { AppConfigService } from '../config/app-config.service';
 import { IMAGE_CONSTANTS, SUPPORTED_IMAGE_TYPES } from './image.constants';
 
@@ -53,6 +56,7 @@ export class ImageController {
     private readonly imageProcessor: ImageProcessingService,
     private readonly geminiService: GeminiService,
     private readonly boundingBoxTransformService: BoundingBoxTransformService,
+    private readonly replicateService: ReplicateService,
     private readonly configService: AppConfigService,
   ) {}
 
@@ -472,5 +476,214 @@ export class ImageController {
       totalDetected: boundingBoxes.length,
       timestamp: new Date().toISOString(),
     };
+  }
+
+  @Post('segment-sam2')
+  @ApiOperation({
+    summary: 'Automatic object segmentation using SAM 2 AI model',
+    description:
+      'Upload an image for automatic segmentation. SAM 2 detects all objects and returns masks. Returns JSON (base64) or ZIP file.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiQuery({
+    name: 'format',
+    required: false,
+    enum: ResponseFormat,
+    description: 'Response format: json (default) or zip',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Image file (JPEG, PNG, WebP)',
+        },
+        points_per_side: {
+          type: 'string',
+          default: '32',
+          description: 'Points per side for mask generation (1-64, higher = more fine-grained)',
+          example: '32',
+        },
+        pred_iou_thresh: {
+          type: 'string',
+          default: '0.88',
+          description: 'Predicted IOU threshold (0-1)',
+          example: '0.88',
+        },
+        stability_score_thresh: {
+          type: 'string',
+          default: '0.95',
+          description: 'Stability score threshold (0-1)',
+          example: '0.95',
+        },
+        use_m2m: {
+          type: 'string',
+          default: 'true',
+          description: 'Use Mask-to-Mask refinement',
+          example: 'true',
+        },
+      },
+      required: ['file'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'JSON response with base64-encoded masks (format=json) or ZIP file (format=zip)',
+    type: Sam2SegmentationResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid file or parameters',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Segmentation processing failed',
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  async segmentSam2(
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: IMAGE_CONSTANTS.MAX_FILE_SIZE_BYTES,
+            message: `File size must be less than ${IMAGE_CONSTANTS.MAX_FILE_SIZE_BYTES / (1024 * 1024)}MB`,
+          }),
+          new FileTypeValidator({
+            fileType: SUPPORTED_IMAGE_TYPES,
+          }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+    @Body() body: any,
+    @Query('format') format: ResponseFormat = ResponseFormat.JSON,
+    @Res() res: Response,
+  ) {
+    const startTime = Date.now();
+
+    // Parse and validate DTO
+    const dto = plainToInstance(Sam2SegmentationDto, {
+      points_per_side: body.points_per_side ? parseInt(body.points_per_side) : undefined,
+      pred_iou_thresh: body.pred_iou_thresh ? parseFloat(body.pred_iou_thresh) : undefined,
+      stability_score_thresh: body.stability_score_thresh ? parseFloat(body.stability_score_thresh) : undefined,
+      use_m2m: body.use_m2m !== undefined ? body.use_m2m === 'true' : undefined,
+      format,
+    });
+
+    const errors = await validate(dto);
+    if (errors.length > 0) {
+      throw new BadRequestException(errors.toString());
+    }
+
+    this.logger.log(
+      `SAM 2 automatic segmentation request (points_per_side: ${dto.points_per_side || 32})`,
+    );
+
+    // Get image dimensions
+    const imageMetadata = await this.imageProcessor.extractImageMetadata(
+      file.buffer,
+    );
+
+    // Convert image to data URL for Replicate API
+    const imageDataUrl = this.replicateService.convertBufferToDataUrl(
+      file.buffer,
+      file.mimetype,
+    );
+
+    // Run SAM 2 automatic segmentation
+    const segmentationResult = await this.replicateService.runSam2Segmentation({
+      image: imageDataUrl,
+      points_per_side: dto.points_per_side,
+      pred_iou_thresh: dto.pred_iou_thresh,
+      stability_score_thresh: dto.stability_score_thresh,
+      use_m2m: dto.use_m2m,
+    });
+
+    // Download combined mask and individual masks
+    const [combinedMaskBuffer, ...individualMaskBuffers] = await Promise.all([
+      this.replicateService.downloadMask(segmentationResult.combined_mask),
+      ...segmentationResult.individual_masks.map((maskUrl) =>
+        this.replicateService.downloadMask(maskUrl),
+      ),
+    ]);
+
+    const processingTimeMs = Date.now() - startTime;
+
+    // JSON format response
+    if (format === ResponseFormat.JSON) {
+      const individualMasks: SegmentationMaskDto[] = individualMaskBuffers.map((buffer, index) => ({
+        index,
+        data: bufferToDataUrl(buffer, 'image/png'),
+      }));
+
+      const combinedMask: CombinedMaskDto = {
+        data: bufferToDataUrl(combinedMaskBuffer, 'image/png'),
+      };
+
+      const response: Sam2SegmentationResponseDto = {
+        combinedMask,
+        individualMasks,
+        metadata: {
+          originalDimensions: {
+            width: imageMetadata.width,
+            height: imageMetadata.height,
+          },
+          totalIndividualMasks: individualMasks.length,
+          pointsPerSide: dto.points_per_side || 32,
+          predIouThresh: dto.pred_iou_thresh,
+          stabilityScoreThresh: dto.stability_score_thresh,
+          useM2m: dto.use_m2m,
+          timestamp: new Date().toISOString(),
+          processingTimeMs,
+        },
+      };
+
+      return response;
+    }
+
+    // ZIP format response
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="sam2-masks-${Date.now()}.zip"`,
+    );
+
+    const archive = archiver('zip', {
+      zlib: { level: IMAGE_CONSTANTS.ZIP_COMPRESSION_LEVEL },
+    });
+
+    archive.pipe(res);
+
+    // Add combined mask
+    archive.append(combinedMaskBuffer, { name: 'combined-mask.png' });
+
+    // Add individual masks
+    individualMaskBuffers.forEach((buffer, index) => {
+      archive.append(buffer, { name: `mask-${index + 1}.png` });
+    });
+
+    // Add metadata JSON
+    const metadata = {
+      originalDimensions: {
+        width: imageMetadata.width,
+        height: imageMetadata.height,
+      },
+      totalIndividualMasks: individualMaskBuffers.length,
+      pointsPerSide: dto.points_per_side || 32,
+      predIouThresh: dto.pred_iou_thresh,
+      stabilityScoreThresh: dto.stability_score_thresh,
+      useM2m: dto.use_m2m,
+      timestamp: new Date().toISOString(),
+      processingTimeMs,
+    };
+
+    archive.append(JSON.stringify(metadata, null, 2), {
+      name: 'metadata.json',
+    });
+
+    await archive.finalize();
   }
 }

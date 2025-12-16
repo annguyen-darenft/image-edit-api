@@ -4,6 +4,7 @@ import { ImageProcessingService } from './services/image-processing/image-proces
 import { ColorParserService } from './services/color-parser/color-parser.service';
 import { GeminiService } from './services/gemini/gemini.service';
 import { BoundingBoxTransformService } from './services/bounding-box-transform/bounding-box-transform.service';
+import { ReplicateService } from './services/replicate/replicate.service';
 
 @Module({
   controllers: [ImageController],
@@ -12,6 +13,7 @@ import { BoundingBoxTransformService } from './services/bounding-box-transform/b
     ColorParserService,
     GeminiService,
     BoundingBoxTransformService,
+    ReplicateService,
   ],
 })
 export class ImageModule {}

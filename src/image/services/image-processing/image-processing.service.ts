@@ -13,7 +13,7 @@ interface ProcessingOptions {
 }
 
 export interface CropRegion {
-  object: string;
+  object?: string;
   position: { x: number; y: number };
   size: { w: number; h: number };
 }
@@ -24,7 +24,7 @@ export interface CropResult {
   metadata: {
     originalDimensions: { width: number; height: number };
     croppedRegions: Array<{
-      object: string;
+      object?: string;
       index: number;
       position: { x: number; y: number };
       size: { width: number; height: number };
@@ -35,9 +35,9 @@ export interface CropResult {
 /**
  * Convert buffer to base64 data URL
  */
-export function bufferToDataUrl(buffer: Buffer): string {
+export function bufferToDataUrl(buffer: Buffer, mimeType: string = 'image/png'): string {
   const base64 = buffer.toString('base64');
-  return `data:image/png;base64,${base64}`;
+  return `data:${mimeType};base64,${base64}`;
 }
 
 interface RawPixelData {
@@ -363,5 +363,18 @@ export class ImageProcessingService {
 
     // Build PNG from modified pixel data
     return this.buildPngFromRaw(data, info.width, info.height);
+  }
+
+  /**
+   * Extract image metadata (dimensions)
+   */
+  async extractImageMetadata(
+    imageBuffer: Buffer,
+  ): Promise<{ width: number; height: number }> {
+    const metadata = await sharp(imageBuffer).metadata();
+    return {
+      width: metadata.width || 0,
+      height: metadata.height || 0,
+    };
   }
 }

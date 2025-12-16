@@ -358,6 +358,132 @@ GEMINI_MODEL=gemini-3-pro-preview
 GEMINI_API_TIMEOUT=600000
 ```
 
+### Segment Objects with SAM 2 AI
+
+**Endpoint:** `POST /api/image/segment-sam2?format={json|zip}`
+
+Automatic object segmentation using Meta's SAM 2 (Segment Anything Model 2) via Replicate API. SAM 2 automatically detects all objects in an image and generates segmentation masks without requiring manual prompts.
+
+**Request:**
+- Content-Type: `multipart/form-data`
+- Query Parameters:
+  - `format` (optional): Response format - `json` (default) or `zip`
+- Form Fields:
+  - `file` (required): Image file (JPEG, PNG, WebP, max 10MB)
+  - `points_per_side` (optional): Points per side for mask generation (1-64, default: 32, higher = more fine-grained)
+  - `pred_iou_thresh` (optional): Predicted IOU threshold (0-1, default: 0.88)
+  - `stability_score_thresh` (optional): Stability score threshold (0-1, default: 0.95)
+  - `use_m2m` (optional): Use Mask-to-Mask refinement (default: "true")
+
+**Response:**
+- JSON format: Combined mask + individual object masks as base64-encoded PNG with metadata
+- ZIP format: `combined-mask.png` + `mask-1.png`, `mask-2.png`, etc. + `metadata.json`
+
+### Example with curl
+
+```bash
+# Automatic segmentation with defaults (JSON response)
+curl -X POST "http://localhost:3000/api/image/segment-sam2" \
+  -F "file=@photo.jpg" \
+  | jq
+
+# Fine-grained segmentation (more masks)
+curl -X POST "http://localhost:3000/api/image/segment-sam2" \
+  -F "file=@photo.jpg" \
+  -F "points_per_side=48" \
+  | jq
+
+# Coarse segmentation (fewer masks, faster)
+curl -X POST "http://localhost:3000/api/image/segment-sam2" \
+  -F "file=@photo.jpg" \
+  -F "points_per_side=16" \
+  | jq
+
+# Download as ZIP file
+curl -X POST "http://localhost:3000/api/image/segment-sam2?format=zip" \
+  -F "file=@photo.jpg" \
+  -o masks.zip
+
+# Custom thresholds for quality control
+curl -X POST "http://localhost:3000/api/image/segment-sam2" \
+  -F "file=@photo.jpg" \
+  -F "pred_iou_thresh=0.9" \
+  -F "stability_score_thresh=0.97" \
+  | jq
+```
+
+**Response Format (JSON):**
+```json
+{
+  "combinedMask": {
+    "data": "data:image/png;base64,iVBORw0KGgo..."
+  },
+  "individualMasks": [
+    {
+      "index": 0,
+      "data": "data:image/png;base64,iVBORw0KGgo..."
+    },
+    {
+      "index": 1,
+      "data": "data:image/png;base64,iVBORw0KGgo..."
+    }
+  ],
+  "metadata": {
+    "originalDimensions": { "width": 1920, "height": 1080 },
+    "totalIndividualMasks": 12,
+    "pointsPerSide": 32,
+    "predIouThresh": 0.88,
+    "stabilityScoreThresh": 0.95,
+    "useM2m": true,
+    "timestamp": "2025-12-16T16:30:00.000Z",
+    "processingTimeMs": 11250
+  }
+}
+```
+
+**Parameters Explained:**
+
+- **`points_per_side`**: Controls mask granularity
+  - Lower (16): Faster, detects large objects only
+  - Default (32): Balanced speed and detail
+  - Higher (48-64): Slower, detects small objects and fine details
+
+- **`pred_iou_thresh`**: Filters masks by predicted intersection-over-union
+  - Lower (0.7-0.85): More masks, may include false positives
+  - Default (0.88): Good balance
+  - Higher (0.9-0.95): Fewer, higher-quality masks
+
+- **`stability_score_thresh`**: Filters masks by stability
+  - Lower (0.9): More masks
+  - Default (0.95): Conservative, stable masks only
+  - Higher (0.97-0.99): Very strict, fewer masks
+
+- **`use_m2m`**: Mask-to-Mask refinement
+  - `true` (default): Better quality, slightly slower
+  - `false`: Faster, may have artifacts
+
+**Processing Time & Cost:**
+- Processing time: ~5-15 seconds per image (varies with Replicate API load and image complexity)
+- Cost: ~$0.01 per image (Replicate API pricing)
+- Runs on L40S GPU infrastructure
+
+**Configuration:**
+Set up your Replicate API token in `.env`:
+
+```bash
+# Get your API token from: https://replicate.com/account/api-tokens
+REPLICATE_API_TOKEN=r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+**Use Cases:**
+- Automatic object detection and extraction
+- Image composition and editing (remove/replace objects)
+- E-commerce product photography (isolate products)
+- Content-aware image processing
+- Dataset annotation for machine learning
+- Medical image analysis (organ/tissue segmentation)
+- Batch processing for large image collections
+
 ## Testing
 
 ```bash

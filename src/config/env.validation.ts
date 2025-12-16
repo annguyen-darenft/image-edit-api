@@ -47,6 +47,11 @@ export class EnvironmentVariables {
   @Max(1200000)
   @IsOptional()
   GEMINI_API_TIMEOUT: number = 600000;
+
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  REPLICATE_API_TOKEN?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

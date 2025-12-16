@@ -86,4 +86,20 @@ export class AppConfigService {
 
     return parsed;
   }
+
+  /**
+   * Get Replicate API token
+   * @throws Error if API token is not configured
+   */
+  get replicateApiToken(): string {
+    const value = this.configService.get<string>('REPLICATE_API_TOKEN');
+
+    if (!value) {
+      throw new Error(
+        'REPLICATE_API_TOKEN is not configured. Get your API token from https://replicate.com/account/api-tokens',
+      );
+    }
+
+    return value;
+  }
 }
