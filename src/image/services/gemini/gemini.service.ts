@@ -10,6 +10,7 @@ import type { ObjectDescriptionDto } from '../../dto/detect-bounding-boxes.dto';
 
 export interface GeminiBoundingBox {
   label: string;
+  type: 'object' | 'cover';
   box_2d: [number, number, number, number]; // [y_min, x_min, y_max, x_max]
 }
 
@@ -118,29 +119,33 @@ export class GeminiService {
     const objectDescriptions = objects
       .map(
         (obj, index) =>
-          `- Object ${index + 1}: ${obj.name}. Mô tả: ${obj.description}.`,
+          `- ${index + 1}: ${obj.name}. Mô tả: ${obj.description}.`,
       )
       .join('\n');
 
-    return `Hãy phân tích tệp hình ảnh gốc. Nhiệm vụ của bạn là xác định khung hình chữ nhật bao quanh (bounding box) cho các đối tượng chính:
+    return `Hãy phân tích tệp hình ảnh gốc. 
+Nhiệm vụ 1: xác định khung hình chữ nhật bao quanh (bounding box) cho các đối tượng chính:
 
 ${objectDescriptions}
 
-Yêu cầu về khung bao quanh: Mỗi khung hình chữ nhật phải bao bọc 'khít' nhất có thể, nhưng phải chứa toàn bộ các yếu tố sau:
+Yêu cầu về bounding box: phải bao bọc 'khít' nhất có thể, nhưng phải chứa toàn bộ các yếu tố sau:
 - Toàn bộ cơ thể của nhân vật.
 - Bóng đổ của nhân vật đó trên mặt đất.
-- Tất cả các vật dụng mà nhân vật đang cầm nắm hoặc tương tác trực tiếp.
+- Các đối tượng vừa chắn lên nhân vật nhưng cũng vừa bị một phần nhân vật che lên (ví dụ đang ôm quả bóng, tay phải che lên quả bóng nhưng bóng che lên tay trái)
+
+Nhiệm vụ 2: xác định bounding box của các vật thể tiền cảnh đang chắn lên bất kì bộ phận nào của các nhân vật trên. 
+Yêu cầu: bounding box phải chứa toàn bộ ảnh của vật thể tiền cảnh đó.
 
 YÊU CẦU TỐI QUAN TRỌNG: Trả về kết quả là một mảng JSON theo cấu trúc sau:
 [
   {
-    "label": "Tên object đó (ví dụ '${objects[0]?.name || 'cậu bé'}')",
-    "box_2d": [y_min, x_min, y_max, x_max]
+    "label": "Tên object đó (nếu object là đối tượng chính) hoặc tên của vật thể tiền cảnh",
+    "type": "'object' nếu đó là đối tượng, 'cover' nếu là vật thể tiền cảnh",
+    "box_2d": [y_min, x_min, y_max, x_max],
   }
 ]
 
 Lưu ý:
-- Các bounding box cố gắng tránh bị đè lên nhau
 - Tọa độ box_2d phải là số nguyên trong khoảng [0, 1000] (normalized coordinates).`;
   }
 

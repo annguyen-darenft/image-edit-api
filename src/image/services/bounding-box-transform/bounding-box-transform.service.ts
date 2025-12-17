@@ -56,6 +56,7 @@ export class BoundingBoxTransformService {
 
       return {
         object: matchedObject,
+        type: geminiBox.type,
         position: { x, y },
         size: { w, h },
       };
@@ -79,7 +80,9 @@ export class BoundingBoxTransformService {
       (obj) => obj.name.toLowerCase() === geminiLabel.toLowerCase(),
     );
     if (exactMatch) {
-      this.logger.debug(`Exact match found: ${geminiLabel} → ${exactMatch.name}`);
+      this.logger.debug(
+        `Exact match found: ${geminiLabel} → ${exactMatch.name}`,
+      );
       return exactMatch.name;
     }
 

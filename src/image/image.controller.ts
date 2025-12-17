@@ -41,8 +41,15 @@ import {
   ObjectDescriptionDto,
 } from './dto/detect-bounding-boxes.dto';
 import { DetectBoundingBoxesResponseDto } from './dto/bounding-box-response.dto';
-import { Sam2SegmentationDto, ResponseFormat } from './dto/sam2-segmentation.dto';
-import { Sam2SegmentationResponseDto, SegmentationMaskDto, CombinedMaskDto } from './dto/sam2-response.dto';
+import {
+  Sam2SegmentationDto,
+  ResponseFormat,
+} from './dto/sam2-segmentation.dto';
+import {
+  Sam2SegmentationResponseDto,
+  SegmentationMaskDto,
+  CombinedMaskDto,
+} from './dto/sam2-response.dto';
 import { AppConfigService } from '../config/app-config.service';
 import { IMAGE_CONSTANTS, SUPPORTED_IMAGE_TYPES } from './image.constants';
 
@@ -375,12 +382,11 @@ export class ImageController {
           example: JSON.stringify([
             {
               name: 'cậu bé',
-              description: 'cậu bé, tóc đen, đi chân đất, quấn khăn trên đầu',
+              description: 'cậu bé quấn khăn trên đầu',
             },
             {
               name: 'bà cụ',
-              description:
-                'bà cụ tóc trắng, đi chân đất, đang cầm thanh sắt mài vào tảng đá',
+              description: 'bà cụ tóc trắng',
             },
           ]),
         },
@@ -503,7 +509,8 @@ export class ImageController {
         points_per_side: {
           type: 'string',
           default: '32',
-          description: 'Points per side for mask generation (1-64, higher = more fine-grained)',
+          description:
+            'Points per side for mask generation (1-64, higher = more fine-grained)',
           example: '32',
         },
         pred_iou_thresh: {
@@ -566,9 +573,15 @@ export class ImageController {
 
     // Parse and validate DTO
     const dto = plainToInstance(Sam2SegmentationDto, {
-      points_per_side: body.points_per_side ? parseInt(body.points_per_side) : undefined,
-      pred_iou_thresh: body.pred_iou_thresh ? parseFloat(body.pred_iou_thresh) : undefined,
-      stability_score_thresh: body.stability_score_thresh ? parseFloat(body.stability_score_thresh) : undefined,
+      points_per_side: body.points_per_side
+        ? parseInt(body.points_per_side)
+        : undefined,
+      pred_iou_thresh: body.pred_iou_thresh
+        ? parseFloat(body.pred_iou_thresh)
+        : undefined,
+      stability_score_thresh: body.stability_score_thresh
+        ? parseFloat(body.stability_score_thresh)
+        : undefined,
       use_m2m: body.use_m2m !== undefined ? body.use_m2m === 'true' : undefined,
       format,
     });
@@ -614,10 +627,12 @@ export class ImageController {
 
     // JSON format response
     if (format === ResponseFormat.JSON) {
-      const individualMasks: SegmentationMaskDto[] = individualMaskBuffers.map((buffer, index) => ({
-        index,
-        data: bufferToDataUrl(buffer, 'image/png'),
-      }));
+      const individualMasks: SegmentationMaskDto[] = individualMaskBuffers.map(
+        (buffer, index) => ({
+          index,
+          data: bufferToDataUrl(buffer, 'image/png'),
+        }),
+      );
 
       const combinedMask: CombinedMaskDto = {
         data: bufferToDataUrl(combinedMaskBuffer, 'image/png'),

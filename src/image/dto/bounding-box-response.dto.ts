@@ -36,6 +36,12 @@ export class BoundingBoxDto {
   object: string;
 
   @ApiProperty({
+    description: 'Object or cover',
+    example: 'object',
+  })
+  type: string;
+
+  @ApiProperty({
     description: 'Top-left corner position',
     type: PositionDto,
   })
