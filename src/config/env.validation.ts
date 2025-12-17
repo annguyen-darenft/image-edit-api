@@ -42,6 +42,10 @@ export class EnvironmentVariables {
   @IsOptional()
   GEMINI_MODEL: string = 'gemini-3-pro-preview';
 
+  @IsString()
+  @IsOptional()
+  GEMINI_IMAGE_MODEL: string = 'gemini-3-pro-image-preview';
+
   @IsNumber()
   @Min(1000)
   @Max(1200000)

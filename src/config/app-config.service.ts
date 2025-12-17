@@ -72,6 +72,16 @@ export class AppConfigService {
   }
 
   /**
+   * Get Gemini image generation model name
+   */
+  get geminiImageModel(): string {
+    return this.configService.get<string>(
+      'GEMINI_IMAGE_MODEL',
+      'gemini-3-pro-image-preview',
+    );
+  }
+
+  /**
    * Get Gemini API timeout in milliseconds
    */
   get geminiTimeout(): number {

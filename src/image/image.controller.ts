@@ -11,6 +11,8 @@ import {
   FileTypeValidator,
   BadRequestException,
   Logger,
+  RequestTimeoutException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -50,6 +52,7 @@ import {
   SegmentationMaskDto,
   CombinedMaskDto,
 } from './dto/sam2-response.dto';
+import { CropObjectGeminiDto } from './dto/crop-object-gemini.dto';
 import { AppConfigService } from '../config/app-config.service';
 import { IMAGE_CONSTANTS, SUPPORTED_IMAGE_TYPES } from './image.constants';
 
@@ -700,5 +703,135 @@ export class ImageController {
     });
 
     await archive.finalize();
+  }
+
+  @Post('crop-object-gemini')
+  @ApiOperation({
+    summary: 'Crop and isolate object using Gemini AI',
+    description:
+      'Use Gemini image generation to isolate main object/character from image, ' +
+      'restore occluded parts, and set non-conflicting background color',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Image file (JPEG, PNG, WebP, max 10MB)',
+        },
+        objectName: {
+          type: 'string',
+          description: 'Name/identifier of target object to isolate',
+          example: 'cậu bé',
+        },
+        objectDescription: {
+          type: 'string',
+          description: 'Optional additional description of target object',
+          example: 'tóc đen, đi chân đất, quấn khăn trên đầu',
+        },
+      },
+      required: ['file', 'objectName'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'PNG image with isolated object and clean background',
+    content: {
+      'image/png': {
+        schema: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid input or file format' })
+  @ApiResponse({ status: 408, description: 'Request timeout' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  @UseInterceptors(FileInterceptor('file'))
+  async cropObjectGemini(
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: IMAGE_CONSTANTS.MAX_FILE_SIZE_BYTES,
+            message: `File size must be less than ${IMAGE_CONSTANTS.MAX_FILE_SIZE_BYTES / (1024 * 1024)}MB`,
+          }),
+          new FileTypeValidator({
+            fileType: SUPPORTED_IMAGE_TYPES,
+          }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+    @Body() body: any,
+    @Res() res: Response,
+  ): Promise<void> {
+    // Parse and validate form fields
+    const dto = plainToInstance(CropObjectGeminiDto, {
+      objectName: body.objectName,
+      objectDescription: body.objectDescription,
+    });
+
+    const errors = await validate(dto);
+    if (errors.length > 0) {
+      throw new BadRequestException(
+        errors
+          .map((e) => Object.values(e.constraints || {}).join(', '))
+          .join('; '),
+      );
+    }
+
+    this.logger.log(
+      `Cropping object "${dto.objectName}" from ${file.originalname}`,
+    );
+
+    try {
+      // Call Gemini service
+      const pngBuffer = await this.geminiService.cropObjectWithGemini(
+        file.buffer,
+        dto.objectName,
+        dto.objectDescription,
+        file.mimetype,
+      );
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const safeName = dto.objectName
+        .replace(/[^a-z0-9]/gi, '-')
+        .toLowerCase();
+      const filename = `cropped-object-${safeName}-${timestamp}.png`;
+
+      // Set response headers
+      res.set({
+        'Content-Type': 'image/png',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Length': pngBuffer.length.toString(),
+      });
+
+      // Stream response
+      res.end(pngBuffer);
+    } catch (error) {
+      this.logger.error('Failed to crop object', error);
+
+      if (error instanceof RequestTimeoutException) {
+        throw error;
+      }
+
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InternalServerErrorException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to process image: ' +
+          (error instanceof Error ? error.message : 'Unknown error'),
+      );
+    }
   }
 }

@@ -325,6 +325,78 @@ Each bounding box includes:
 - All object names and descriptions in Vietnamese
 - Processing time: typically < 10 minutes for 2MP images
 
+### Crop Object with Gemini AI
+
+**Endpoint:** `POST /api/image/crop-object-gemini`
+
+Isolate and extract specific objects from images using Google Gemini 3 Pro image generation AI. The AI will:
+- Isolate the main object/character
+- Remove non-character elements
+- Restore occluded body parts
+- Set a non-conflicting solid background color (#00FF00, #0000FF, or #FF00FF)
+
+**Request:**
+- Content-Type: `multipart/form-data`
+- Fields:
+  - `file` (required): Image file (JPEG, PNG, WebP, max 10MB)
+  - `objectName` (required): Name/identifier of target object
+  - `objectDescription` (optional): Additional description of object
+
+**Response:**
+- Content-Type: `image/png`
+- PNG image with isolated object and clean background
+- Dimensions match input image exactly
+
+**Example with curl:**
+
+```bash
+# Basic object isolation
+curl -X POST http://localhost:3000/api/image/crop-object-gemini \
+  -F "file=@comic.jpg" \
+  -F "objectName=cậu bé" \
+  -o isolated-object.png
+
+# With detailed description
+curl -X POST http://localhost:3000/api/image/crop-object-gemini \
+  -F "file=@photo.jpg" \
+  -F "objectName=cậu bé" \
+  -F "objectDescription=tóc đen, đi chân đất, quấn khăn trên đầu" \
+  -o isolated-boy.png
+
+# Another example
+curl -X POST http://localhost:3000/api/image/crop-object-gemini \
+  -F "file=@scene.png" \
+  -F "objectName=bà cụ" \
+  -F "objectDescription=tóc trắng, đang cầm thanh sắt" \
+  -o isolated-woman.png
+```
+
+**Vietnamese Prompt Structure:**
+
+The endpoint uses a carefully crafted Vietnamese prompt to guide Gemini:
+- Focuses on the main object: `{objectName} {objectDescription}`
+- Removes non-character elements
+- Restores occluded parts
+- Sets background to #00FF00, #0000FF, or #FF00FF (non-conflicting)
+
+**Image Configuration (Auto-Selected):**
+- **Aspect Ratio**: Automatically calculated and matched to nearest supported ratio ("1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9")
+- **Image Size**: Auto-selected from 1K, 2K, 4K based on input dimensions
+- Passed to Gemini API via `imageConfig` to optimize generation quality
+
+**Configuration:**
+
+```bash
+# Add to .env
+GEMINI_IMAGE_MODEL=gemini-3-pro-image-preview
+```
+
+**Processing Notes:**
+- Processing time: typically 5-30 seconds depending on image complexity
+- Background color automatically selected to not conflict with object colors
+- Output dimensions always match input dimensions exactly
+- Supports Vietnamese object names and descriptions
+
 ### Workflow: Detect and Crop Objects
 
 Combine `detect-bounding-boxes` and `crop-regions` APIs to automatically detect and extract objects:
