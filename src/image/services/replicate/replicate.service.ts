@@ -61,7 +61,7 @@ export class ReplicateService {
 
     for (let attempt = 0; attempt < this.maxRetries; attempt++) {
       try {
-        const output = await this.client.run(
+        const output = (await this.client.run(
           'meta/sam-2:fe97b453a6455861e3bac769b441ca1f1086110da7466dbb65cf1eecfd60dc83',
           {
             input: {
@@ -72,11 +72,13 @@ export class ReplicateService {
               use_m2m: input.use_m2m ?? true,
             },
           },
-        ) as any;
+        )) as any;
 
         // Validate output structure
         if (!output || typeof output !== 'object') {
-          throw new Error('Invalid response from Replicate API: expected object');
+          throw new Error(
+            'Invalid response from Replicate API: expected object',
+          );
         }
 
         const combinedMask = output.combined_mask;
@@ -89,7 +91,9 @@ export class ReplicateService {
 
         // Validate individual_masks
         if (!Array.isArray(individualMasks)) {
-          throw new Error('Invalid response: individual_masks must be an array');
+          throw new Error(
+            'Invalid response: individual_masks must be an array',
+          );
         }
 
         // Validate all mask URLs
@@ -123,7 +127,7 @@ export class ReplicateService {
    * Sleep for specified milliseconds
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**

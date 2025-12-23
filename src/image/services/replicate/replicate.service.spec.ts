@@ -74,7 +74,9 @@ describe('ReplicateService', () => {
         statusText: 'Not Found',
       });
 
-      await expect(service.downloadMask(mockUrl)).rejects.toThrow('Mask download failed');
+      await expect(service.downloadMask(mockUrl)).rejects.toThrow(
+        'Mask download failed',
+      );
     });
   });
 

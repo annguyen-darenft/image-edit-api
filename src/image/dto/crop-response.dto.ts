@@ -26,7 +26,8 @@ export class CroppedImageDto {
   size: { width: number; height: number };
 
   @ApiProperty({
-    description: 'Object identifier (optional, from detect-bounding-boxes results)',
+    description:
+      'Object identifier (optional, from detect-bounding-boxes results)',
     example: 'cậu bé',
     required: false,
   })
@@ -69,7 +70,8 @@ export class CropRegionsResponseDto {
   croppedImages: CroppedImageDto[];
 
   @ApiProperty({
-    description: 'Background image with cropped regions marked transparent (null if not included)',
+    description:
+      'Background image with cropped regions marked transparent (null if not included)',
     type: BackgroundImageDto,
     nullable: true,
   })

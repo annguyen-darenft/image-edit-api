@@ -35,7 +35,10 @@ export interface CropResult {
 /**
  * Convert buffer to base64 data URL
  */
-export function bufferToDataUrl(buffer: Buffer, mimeType: string = 'image/png'): string {
+export function bufferToDataUrl(
+  buffer: Buffer,
+  mimeType: string = 'image/png',
+): string {
   const base64 = buffer.toString('base64');
   return `data:${mimeType};base64,${base64}`;
 }

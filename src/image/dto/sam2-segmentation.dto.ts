@@ -18,7 +18,8 @@ export enum ResponseFormat {
  */
 export class Sam2SegmentationDto {
   @ApiPropertyOptional({
-    description: 'Number of points per side for mask generation (higher = more fine-grained masks)',
+    description:
+      'Number of points per side for mask generation (higher = more fine-grained masks)',
     minimum: 1,
     maximum: 64,
     default: 32,

@@ -7,6 +7,8 @@ import {
   ValidateNested,
   ArrayMinSize,
   ArrayMaxSize,
+  IsUrl,
+  IsOptional,
 } from 'class-validator';
 
 export class ObjectDescriptionDto {
@@ -28,6 +30,15 @@ export class ObjectDescriptionDto {
 }
 
 export class DetectBoundingBoxesDto {
+  @ApiProperty({
+    description: 'URL of the image to process',
+    example: 'https://example.com/image.jpg',
+    required: false,
+  })
+  @IsUrl()
+  @IsOptional()
+  imageUrl?: string;
+
   @ApiProperty({
     description: 'List of objects to detect',
     type: [ObjectDescriptionDto],

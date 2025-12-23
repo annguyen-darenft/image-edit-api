@@ -367,7 +367,7 @@ export class ImageController {
   @ApiOperation({
     summary: 'Detect bounding boxes of objects in image using Gemini AI',
     description:
-      'Upload a comic image and specify objects to detect with Vietnamese descriptions. Returns bounding box coordinates in absolute pixels.',
+      'Provide either an image URL or upload an image file, and specify objects to detect with Vietnamese descriptions. Returns bounding box coordinates in absolute pixels.',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -377,7 +377,14 @@ export class ImageController {
         file: {
           type: 'string',
           format: 'binary',
-          description: 'Image file (JPEG, PNG, WebP)',
+          description:
+            'Image file (JPEG, PNG, WebP) - optional if imageUrl is provided',
+        },
+        imageUrl: {
+          type: 'string',
+          description:
+            'URL of the image to process - optional if file is provided',
+          example: 'https://example.com/image.jpg',
         },
         objects: {
           type: 'string',
@@ -394,7 +401,7 @@ export class ImageController {
           ]),
         },
       },
-      required: ['file', 'objects'],
+      required: ['objects'],
     },
   })
   @ApiResponse({
@@ -404,7 +411,7 @@ export class ImageController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Invalid file, objects, or image size',
+    description: 'Invalid file, objects, imageUrl, or image size',
   })
   @ApiResponse({
     status: 500,
@@ -423,16 +430,25 @@ export class ImageController {
             fileType: SUPPORTED_IMAGE_TYPES,
           }),
         ],
+        fileIsRequired: false,
       }),
     )
-    file: Express.Multer.File,
+    file: Express.Multer.File | undefined,
     @Body('objects') objectsJson: string,
+    @Body('imageUrl') imageUrl?: string,
   ): Promise<DetectBoundingBoxesResponseDto> {
+    // Validate that either file or imageUrl is provided
+    if (!file && !imageUrl) {
+      throw new BadRequestException(
+        'Either file upload or imageUrl must be provided',
+      );
+    }
+
     // Parse and validate DTO
     let dto: DetectBoundingBoxesDto;
     try {
       const objects = JSON.parse(objectsJson);
-      dto = plainToInstance(DetectBoundingBoxesDto, { objects });
+      dto = plainToInstance(DetectBoundingBoxesDto, { objects, imageUrl });
 
       const errors = await validate(dto);
       if (errors.length > 0) {
@@ -447,13 +463,53 @@ export class ImageController {
       );
     }
 
-    // Extract image dimensions from uploaded file
+    // Prepare image buffer and mimetype
+    let imageBuffer: Buffer;
+    let imageMimeType: string;
+
+    if (imageUrl) {
+      // Fetch image from URL
+      this.logger.log(`Fetching image from URL: ${imageUrl}`);
+      try {
+        const response = await fetch(imageUrl);
+        if (!response.ok) {
+          throw new BadRequestException(
+            `Failed to fetch image from URL: ${response.status} ${response.statusText}`,
+          );
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        imageBuffer = Buffer.from(arrayBuffer);
+        imageMimeType = response.headers.get('content-type') || 'image/jpeg';
+
+        // Validate content type
+        if (!imageMimeType.startsWith('image/')) {
+          throw new BadRequestException(
+            `URL does not point to an image. Content-Type: ${imageMimeType}`,
+          );
+        }
+      } catch (error) {
+        if (error instanceof BadRequestException) {
+          throw error;
+        }
+        throw new BadRequestException(
+          'Failed to fetch image from URL: ' +
+            (error instanceof Error ? error.message : 'Unknown error'),
+        );
+      }
+    } else {
+      // Use uploaded file
+      imageBuffer = file!.buffer;
+      imageMimeType = file!.mimetype;
+    }
+
+    // Extract image dimensions
     const sharp = (await import('sharp')).default;
-    const metadata = await sharp(file.buffer).metadata();
+    const metadata = await sharp(imageBuffer).metadata();
 
     if (!metadata.width || !metadata.height) {
       throw new BadRequestException(
-        'Failed to extract image dimensions from uploaded file',
+        'Failed to extract image dimensions from image',
       );
     }
 
@@ -463,14 +519,14 @@ export class ImageController {
     };
 
     this.logger.log(
-      `Processing image: ${imageSize.width}x${imageSize.height}, ${dto.objects.length} objects`,
+      `Processing image: ${imageSize.width}x${imageSize.height}, ${dto.objects.length} objects, mimetype ${imageMimeType}`,
     );
 
     // Detect bounding boxes with Gemini
     const geminiBoundingBoxes = await this.geminiService.detectBoundingBoxes(
-      file.buffer,
+      imageBuffer,
       dto.objects,
-      file.mimetype,
+      imageMimeType,
     );
 
     // Transform to API format
@@ -800,9 +856,7 @@ export class ImageController {
 
       // Generate filename with timestamp
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const safeName = dto.objectName
-        .replace(/[^a-z0-9]/gi, '-')
-        .toLowerCase();
+      const safeName = dto.objectName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
       const filename = `cropped-object-${safeName}-${timestamp}.png`;
 
       // Set response headers
